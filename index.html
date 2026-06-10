@@ -60,10 +60,10 @@
   </div>
 
   <div class="card">
-    <label>Curva de percentil + sua posição</label>
+    <label>Distribuição + sua posição</label>
     <canvas id="curve" width="840" height="260"></canvas>
-    <p class="note">Eixo X = score EN, eixo Y = percentil (% de criativos abaixo). Áreas = faixas
-    Baixo / Médio / Alto. Linha preta = o score digitado.</p>
+    <p class="note">Áreas coloridas = faixas Baixo / Médio / Alto. Linha tracejada = cortes.
+    Linha preta = o score digitado. (Distribuição reconstruída da curva de percentil — dado agregado.)</p>
   </div>
 
   <div class="card">
@@ -131,29 +131,34 @@ function render(){
 }
 
 function draw(c, s){
-  const cv=document.getElementById('curve'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height, pad=30;
+  const cv=document.getElementById('curve'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height, pad=28;
   ctx.clearRect(0,0,W,H);
-  const X=v=>pad+(v/100)*(W-2*pad), Y=p=>H-pad-(p/100)*(H-2*pad);
+  const X=v=>pad+(v/100)*(W-2*pad), plotH=H-2*pad;
+  // band backgrounds
   for(const [lo,hi,col] of [[0,c.low,'rgba(231,76,60,.10)'],[c.low,c.high,'rgba(243,156,18,.10)'],[c.high,100,'rgba(46,204,113,.10)']]){
-    ctx.fillStyle=col; ctx.fillRect(X(lo),pad,X(hi)-X(lo),H-2*pad); }
-  // percentile curve from q
-  const q=d().q;
-  ctx.strokeStyle='#4A90D9'; ctx.lineWidth=2.5; ctx.beginPath();
-  for(let p=0;p<=100;p++){ const x=X(q[p]), y=Y(p); p===0?ctx.moveTo(x,y):ctx.lineTo(x,y); } ctx.stroke();
+    ctx.fillStyle=col; ctx.fillRect(X(lo),pad,X(hi)-X(lo),plotH); }
+  // histogram reconstructed from quantiles: density in EN bin = pctile(b) - pctile(a)  (aggregate, no raw scores)
+  const bins=50, bw=100/bins, dens=[];
+  for(let i=0;i<bins;i++) dens.push(Math.max(0, pctile((i+1)*bw)-pctile(i*bw)));
+  const mx=Math.max(...dens)||1, barW=X(bw)-X(0);
+  for(let i=0;i<bins;i++){
+    const h=dens[i]/mx*plotH, mid=(i+0.5)*bw;
+    ctx.fillStyle = mid<c.low?'#E74C3C':(mid<c.high?'#F39C12':'#2ECC71');
+    ctx.globalAlpha=.85; ctx.fillRect(X(i*bw)+0.5, H-pad-h, barW-1, h);
+  }
+  ctx.globalAlpha=1;
   // cutoff lines
-  ctx.setLineDash([4,3]); ctx.lineWidth=1; ctx.strokeStyle='#888';
+  ctx.setLineDash([4,3]); ctx.lineWidth=1; ctx.strokeStyle='#777';
   for(const cc of [c.low,c.high]){ ctx.beginPath(); ctx.moveTo(X(cc),pad); ctx.lineTo(X(cc),H-pad); ctx.stroke(); }
   // score marker
-  if(s!=null){ const p=pctile(s); ctx.setLineDash([]); ctx.strokeStyle='#111'; ctx.lineWidth=2.5;
+  if(s!=null){ ctx.setLineDash([]); ctx.strokeStyle='#111'; ctx.lineWidth=2.5;
     ctx.beginPath(); ctx.moveTo(X(s),pad-6); ctx.lineTo(X(s),H-pad); ctx.stroke();
-    ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(X(s),Y(p),4,0,7); ctx.fill();
-    ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.fillText(s,X(s),pad-10); }
-  // axes
+    ctx.fillStyle='#111'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.fillText(s,X(s),pad-10); }
+  // x axis
   ctx.setLineDash([]); ctx.strokeStyle='#cbd5e1'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad); ctx.moveTo(pad,pad); ctx.lineTo(pad,H-pad); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad); ctx.stroke();
   ctx.fillStyle='#6b7280'; ctx.font='11px sans-serif'; ctx.textAlign='center';
   for(let v=0;v<=100;v+=20) ctx.fillText(v,X(v),H-pad+14);
-  ctx.textAlign='right'; for(let pp=0;pp<=100;pp+=25) ctx.fillText(pp,pad-6,Y(pp)+3);
 }
 document.getElementById('score').addEventListener('input', render);
 render();
