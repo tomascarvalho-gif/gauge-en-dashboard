@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gauge — Engajamento Neural</title>
+<style>
+  :root{--baixo:#E74C3C;--medio:#F39C12;--alto:#2ECC71;--ink:#1f2933;--mut:#6b7280;--line:#e5e7eb;}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);margin:0;background:#f7f8fa;line-height:1.5}
+  .wrap{max-width:880px;margin:0 auto;padding:28px 20px 60px}
+  .banner{background:#fff4e5;border:1px solid #f0c36d;color:#7a4f01;border-radius:10px;padding:11px 14px;margin-bottom:20px;font-size:13px;line-height:1.45}
+  .banner b{color:#5a3a00}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:var(--mut);margin:0 0 24px;font-size:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:20px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  label{font-size:12px;color:var(--mut);display:block;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  input[type=number]{font-size:30px;width:160px;padding:8px 12px;border:2px solid var(--line);border-radius:10px;outline:none}
+  input[type=number]:focus{border-color:#4A90D9}
+  .seg{display:inline-flex;border:2px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:0;background:#fff;padding:11px 18px;font-size:15px;cursor:pointer;font-weight:600;color:var(--mut)}
+  .seg button.on{background:#4A90D9;color:#fff}
+  .result{margin-top:22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .badge{font-size:15px;font-weight:800;color:#fff;padding:10px 20px;border-radius:999px;letter-spacing:.02em}
+  .big{font-size:17px}
+  .big b{font-size:22px}
+  .bands{display:flex;margin:8px 0 0;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .bands div{padding:10px 12px;font-size:13px;color:#fff;flex:1;text-align:center}
+  canvas{width:100%;height:260px;display:block}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left}
+  th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .pill{font-weight:700;padding:2px 9px;border-radius:999px;color:#fff;font-size:12px}
+  .note{font-size:13px;color:var(--mut);margin-top:10px}
+  code{background:#f0f2f5;padding:1px 6px;border-radius:5px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner">⚠ <b>Uso interno SynapSee.</b> Mostra a distribuição agregada de Engajamento Neural
+  da plataforma (synapsee-prod) — sem nomes de cliente/criativo. Não compartilhar externamente sem autorização do Tomás.</div>
+  <h1>Gauge — Engajamento Neural</h1>
+  <p class="sub">Digite o score (EN) de um criativo e veja o percentil e a faixa, com base na
+  distribuição real da plataforma. Imagem e vídeo têm faixas próprias.</p>
+
+  <div class="card">
+    <div class="row">
+      <div><label>Score EN (0–100)</label>
+        <input id="score" type="number" min="0" max="100" step="0.1" value="85"></div>
+      <div><label>Tipo de mídia</label>
+        <div class="seg">
+          <button id="bImg" class="on" onclick="setType('image')">Imagem</button>
+          <button id="bVid" onclick="setType('video')">Vídeo</button>
+        </div></div>
+    </div>
+    <div class="result"><span id="badge" class="badge">—</span><span id="msg" class="big">—</span></div>
+    <div class="bands" id="bands"></div>
+    <p class="note" id="meta"></p>
+  </div>
+
+  <div class="card">
+    <label>Curva de percentil + sua posição</label>
+    <canvas id="curve" width="840" height="260"></canvas>
+    <p class="note">Eixo X = score EN, eixo Y = percentil (% de criativos abaixo). Áreas = faixas
+    Baixo / Médio / Alto. Linha preta = o score digitado.</p>
+  </div>
+
+  <div class="card">
+    <label>Tabela de referência</label>
+    <table><thead><tr><th>Score</th><th>Percentil</th><th>Top %</th><th>Faixa</th></tr></thead>
+      <tbody id="ref"></tbody></table>
+    <p class="note" id="refnote"></p>
+  </div>
+
+  <p class="note">O Gauge é um <b>ranking</b> contra a base real — não uma nota absoluta. "Alto" = top 20%
+  dos criativos <i>daquele tipo de mídia</i>. Dados: apenas estatística agregada (curva de percentil) de
+  <code>synapsee-prod</code> (export 2026-06-08, sem Havas).</p>
+</div>
+
+<script>
+const DB = {"image": {"q": [2.79, 25.42, 39.82, 46.74, 53.0, 56.85, 58.5, 59.9, 61.03, 61.85, 62.53, 63.22, 63.88, 64.32, 64.77, 65.3, 65.78, 66.33, 66.69, 67.03, 67.37, 67.58, 67.96, 68.33, 68.5, 68.72, 69.17, 69.63, 69.92, 70.18, 70.39, 70.74, 70.93, 71.18, 71.4, 71.71, 72.02, 72.43, 72.66, 72.93, 73.15, 73.36, 73.57, 73.76, 73.99, 74.3, 74.63, 74.95, 75.23, 75.51, 75.82, 76.06, 76.44, 76.77, 77.07, 77.38, 77.64, 77.92, 78.2, 78.49, 78.71, 79.04, 79.47, 79.76, 80.05, 80.42, 80.75, 81.05, 81.35, 81.68, 81.89, 82.26, 82.63, 82.87, 83.27, 83.69, 84.09, 84.51, 84.77, 85.15, 85.51, 85.82, 86.29, 86.56, 86.94, 87.41, 87.72, 88.01, 88.57, 89.0, 89.38, 89.91, 90.29, 90.74, 91.39, 92.03, 92.44, 93.09, 93.92, 95.19, 97.59], "n": 2418, "mean": 75.1}, "video": {"q": [9.74, 28.42, 30.88, 33.43, 35.37, 37.37, 37.59, 38.18, 39.7, 40.21, 41.2, 41.36, 41.51, 41.51, 42.59, 43.48, 44.26, 44.91, 45.75, 46.33, 46.89, 47.59, 47.73, 48.12, 49.05, 49.76, 49.88, 50.27, 50.7, 50.98, 51.24, 51.6, 51.61, 52.62, 52.95, 53.72, 54.35, 55.35, 55.5, 56.17, 56.51, 56.84, 57.06, 57.28, 57.99, 58.62, 59.24, 59.33, 59.45, 59.55, 59.75, 60.13, 60.4, 60.81, 61.08, 61.34, 61.57, 62.31, 62.4, 63.28, 63.69, 64.3, 64.93, 64.97, 65.01, 65.2, 65.51, 66.11, 66.51, 66.77, 67.28, 68.25, 68.44, 68.5, 68.52, 68.74, 69.18, 69.4, 69.57, 69.85, 70.03, 70.61, 71.12, 71.46, 72.01, 72.58, 72.92, 73.21, 73.45, 73.79, 74.99, 75.97, 76.71, 77.34, 77.68, 78.57, 78.59, 79.64, 80.72, 82.61, 88.99], "n": 240, "mean": 58.7}, "cut": {"image": {"low": 67.4, "high": 85.5}, "video": {"low": 46.9, "high": 70.0}}};
+const HEX = {Baixo:'#E74C3C', Médio:'#F39C12', Alto:'#2ECC71'};
+let type='image';
+const d = () => DB[type];
+const cut = () => DB.cut[type];
+function faixa(s){const c=cut();return s<c.low?'Baixo':(s<c.high?'Médio':'Alto');}
+
+// percentile of a score, by interpolating the embedded quantile curve q[p]=EN@P
+function pctile(s){
+  const q=d().q;
+  if(s<=q[0]) return 0;
+  if(s>=q[100]) return 100;
+  for(let p=0;p<100;p++){
+    if(q[p]<=s && s<=q[p+1]){ const sp=q[p+1]-q[p]; return p + (sp>0?(s-q[p])/sp:0); }
+  }
+  return 100;
+}
+
+function setType(t){
+  type=t;
+  document.getElementById('bImg').classList.toggle('on', t==='image');
+  document.getElementById('bVid').classList.toggle('on', t==='video');
+  render();
+}
+
+function render(){
+  const c=cut(), s=parseFloat(document.getElementById('score').value), ok=!isNaN(s);
+  const f=ok?faixa(s):'—', p=ok?pctile(s):0, top=Math.round((100-p)*10)/10;
+  const badge=document.getElementById('badge');
+  badge.textContent=f; badge.style.background=ok?HEX[f]:'#9ca3af';
+  document.getElementById('msg').innerHTML = ok
+    ? `EN <b>${s}</b> &rarr; percentil P${Math.round(p)} &rarr; <b>top ${top}%</b>` : 'digite um número';
+  document.getElementById('bands').innerHTML =
+    `<div style="background:#E74C3C">Baixo &lt; ${c.low}</div>`+
+    `<div style="background:#F39C12">Médio ${c.low}–${c.high}</div>`+
+    `<div style="background:#2ECC71">Alto &ge; ${c.high}</div>`;
+  document.getElementById('meta').innerHTML =
+    `Base: <b>${d().n.toLocaleString('pt-BR')}</b> ${type==='image'?'imagens':'vídeos'} · média ${d().mean} · `+
+    `cortes P20=${c.low} / P80=${c.high}` + (type==='video' ? ' · <b>ressalva:</b> vídeo n=240, todos originais (sem NeuroGen)' : '');
+
+  const ref=document.getElementById('ref'); ref.innerHTML='';
+  const pts = type==='image' ? [50,60,70,75,80,85,90,95] : [40,50,60,67,70,75,80,85];
+  for(const x of pts){ const pp=pctile(x), tt=Math.round((100-pp)*10)/10, ff=faixa(x);
+    ref.insertAdjacentHTML('beforeend',
+      `<tr><td>${x}</td><td>P${Math.round(pp)}</td><td>top ${tt}%</td><td><span class="pill" style="background:${HEX[ff]}">${ff}</span></td></tr>`); }
+  document.getElementById('refnote').textContent = type==='image'
+    ? 'Ex.: 85 = top 21% → Médio. Para ser Alto (top 20%) precisa ≥ 85,5.'
+    : 'Vídeo pontua mais baixo: 70 já é top 20% → Alto.';
+  draw(c, ok?s:null);
+}
+
+function draw(c, s){
+  const cv=document.getElementById('curve'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height, pad=30;
+  ctx.clearRect(0,0,W,H);
+  const X=v=>pad+(v/100)*(W-2*pad), Y=p=>H-pad-(p/100)*(H-2*pad);
+  for(const [lo,hi,col] of [[0,c.low,'rgba(231,76,60,.10)'],[c.low,c.high,'rgba(243,156,18,.10)'],[c.high,100,'rgba(46,204,113,.10)']]){
+    ctx.fillStyle=col; ctx.fillRect(X(lo),pad,X(hi)-X(lo),H-2*pad); }
+  // percentile curve from q
+  const q=d().q;
+  ctx.strokeStyle='#4A90D9'; ctx.lineWidth=2.5; ctx.beginPath();
+  for(let p=0;p<=100;p++){ const x=X(q[p]), y=Y(p); p===0?ctx.moveTo(x,y):ctx.lineTo(x,y); } ctx.stroke();
+  // cutoff lines
+  ctx.setLineDash([4,3]); ctx.lineWidth=1; ctx.strokeStyle='#888';
+  for(const cc of [c.low,c.high]){ ctx.beginPath(); ctx.moveTo(X(cc),pad); ctx.lineTo(X(cc),H-pad); ctx.stroke(); }
+  // score marker
+  if(s!=null){ const p=pctile(s); ctx.setLineDash([]); ctx.strokeStyle='#111'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(X(s),pad-6); ctx.lineTo(X(s),H-pad); ctx.stroke();
+    ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(X(s),Y(p),4,0,7); ctx.fill();
+    ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.fillText(s,X(s),pad-10); }
+  // axes
+  ctx.setLineDash([]); ctx.strokeStyle='#cbd5e1'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad); ctx.moveTo(pad,pad); ctx.lineTo(pad,H-pad); ctx.stroke();
+  ctx.fillStyle='#6b7280'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  for(let v=0;v<=100;v+=20) ctx.fillText(v,X(v),H-pad+14);
+  ctx.textAlign='right'; for(let pp=0;pp<=100;pp+=25) ctx.fillText(pp,pad-6,Y(pp)+3);
+}
+document.getElementById('score').addEventListener('input', render);
+render();
+</script>
+</body>
+</html>
